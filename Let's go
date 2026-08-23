@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义表单收集系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft Yahei", system-ui, sans-serif;
+        }
+        body {
+            background: #f0f2f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            background: #165DFF;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-primary { background: #165DFF; color: white; }
+        .btn-success { background: #00B42A; color: white; }
+        .btn-danger { background: #F53F3F; color: white; }
+        .btn-warning { background: #FF7D00; color: white; }
+        .btn-default { background: #e5e6eb; color: #333; }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #dcdfe6;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 6px 0 14px 0;
+            outline: none;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: #165DFF;
+        }
+        label {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+        }
+        .hidden { display: none !important; }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .tab-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .tab-item.active {
+            background: #165DFF;
+            color: white;
+        }
+        .record-item {
+            border: 1px solid #eee;
+            border-radius: 6px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        .record-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .status-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .status-pending { background: #fff7e6; color: #ff7d00; }
+        .status-pass { background: #e8ffea; color: #00b42a; }
+        .field-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .field-row select, .field-row input {
+            margin: 0;
+        }
+        .modal-mask {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .modal {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            width: 400px;
+        }
+        .firewall-tip {
+            text-align: center;
+            padding: 60px 20px;
+            color: #F53F3F;
+        }
+        .img-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 4px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 防火墙拦截页 -->
+    <div id="firewallPage" class="container hidden">
+        <div class="card firewall-tip">
+            <h2>⚠️ 访问被防火墙拦截</h2>
+            <p>检测到异常访问行为，请返回首页正常操作</p>
+            <button class="btn btn-primary" onclick="goHome()">返回首页</button>
+        </div>
+    </div>
+
+    <div id="app" class="container">
+        <div class="header">
+            <h3>自定义表单收集系统</h3>
+            <div>
+                <span id="roleText">访客</span>
+                <button class="btn btn-default" id="loginBtn" onclick="showLogin()">管理员登录</button>
+                <button class="btn btn-default hidden" id="logoutBtn" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+
+        <!-- 普通用户填表页 -->
+        <div id="userPage" class="card">
+            <h3 style="margin-bottom: 16px;">信息提交</h3>
+            <form id="userForm" onsubmit="submitForm(event)">
+                <div id="formFields"></div>
+                <button type="submit" class="btn btn-primary">提交信息</button>
+            </form>
+        </div>
+
+        <!-- 管理员后台 -->
+        <div id="adminPage" class="card hidden">
+            <div class="tabs">
+                <div class="tab-item active" onclick="switchTab('formConfig')">表单配置</div>
+                <div class="tab-item" onclick="switchTab('records')">提交记录</div>
+                <div class="tab-item" onclick="switchTab('userManage')">管理员管理</div>
+            </div>
+
+            <!-- 表单配置 -->
+            <div id="tab-formConfig">
+                <h4 style="margin-bottom: 12px;">自定义表单字段</h4>
+                <div id="fieldList"></div>
+                <div class="field-row">
+                    <input type="text" id="newFieldName" placeholder="字段名称（如：姓名）">
+                    <select id="newFieldType" style="width: 120px;">
+                        <option value="text">文字</option>
+                        <option value="number">数字</option>
+                        <option value="image">图片</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="addField()">添加字段</button>
+                </div>
+            </div>
+
+            <!-- 提交记录 -->
+            <div id="tab-records" class="hidden">
+                <h4 style="margin-bottom: 12px;">提交记录管理</h4>
+                <div id="recordList"></div>
+            </div>
+
+            <!-- 管理员管理 -->
+            <div id="tab-userManage" class="hidden">
+                <h4 style="margin-bottom: 12px;">管理员账号管理</h4>
+                <div id="adminList"></div>
+                <div class="field-row" style="margin-top: 16px;">
+                    <input type="text" id="newAdminUser" placeholder="新管理员账号">
+                    <input type="password" id="newAdminPass" placeholder="新管理员密码">
+                    <button class="btn btn-primary" onclick="addAdmin()">授予管理员</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录弹窗 -->
+    <div id="loginModal" class="modal-mask hidden">
+        <div class="modal">
+            <h3 style="margin-bottom: 16px;">管理员登录</h3>
+            <label>账号</label>
+            <input type="text" id="loginUser" placeholder="请输入账号">
+            <label>密码</label>
+            <input type="password" id="loginPass" placeholder="请输入密码">
+            <p id="loginTip" style="color: #F53F3F; font-size: 12px; margin-bottom: 10px;"></p>
+            <div style="text-align: right;">
+                <button class="btn btn-default" onclick="closeLogin()">取消</button>
+                <button class="btn btn-primary" onclick="doLogin()">登录</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除理由弹窗 -->
+    <div id="deleteModal" class="modal-mask hidden">
+        <div class="modal">
+            <h3 style="margin-bottom: 16px;">删除记录</h3>
+            <label>请填写删除理由</label>
+            <textarea id="deleteReason" rows="3" placeholder="必填，请说明删除原因"></textarea>
+            <div style="text-align: right;">
+                <button class="btn btn-default" onclick="closeDeleteModal()">取消</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化默认数据
+        function initData() {
+            if (!localStorage.getItem('formFields')) {
+                const defaultFields = [
+                    { id: 1, name: '姓名', type: 'text' },
+                    { id: 2, name: '年龄', type: 'number' },
+                    { id: 3, name: '证件照片', type: 'image' }
+                ];
+                localStorage.setItem('formFields', JSON.stringify(defaultFields));
+            }
+            if (!localStorage.getItem('admins')) {
+                localStorage.setItem('admins', JSON.stringify([
+                    { username: 'admin', password: '123456' }
+                ]));
+            }
+            if (!localStorage.getItem('records')) {
+                localStorage.setItem('records', JSON.stringify([]));
+            }
+            if (!localStorage.getItem('loginFailCount')) {
+                localStorage.setItem('loginFailCount', 0);
+            }
+        }
+
+        // 防火墙检测
+        function firewallCheck() {
+            const failCount = parseInt(localStorage.getItem('loginFailCount') || 0);
+            if (failCount >= 5) {
+                document.getElementById('app').classList.add('hidden');
+                document.getElementById('firewallPage').classList.remove('hidden');
+                return false;
+            }
+            return true;
+        }
+
+        function goHome() {
+            localStorage.setItem('loginFailCount', 0);
+            location.reload();
+        }
+
+        // 渲染用户填表表单
+        function renderForm() {
+            const fields = JSON.parse(localStorage.getItem('formFields') || '[]');
+            const container = document.getElementById('formFields');
+            container.innerHTML = '';
+            fields.forEach(field => {
+                const div = document.createElement('div');
+                div.innerHTML = `<label>${field.name}</label>`;
+                if (field.type === 'text') {
+                    div.innerHTML += `<input type="text" name="${field.id}" required>`;
+                } else if (field.type === 'number') {
+                    div.innerHTML += `<input type="number" name="${field.id}" required>`;
+                } else if (field.type === 'image') {
+                    div.innerHTML += `<input type="file" name="${field.id}" accept="image/*" required onchange="previewImg(this)">`;
+                    div.innerHTML += `<img class="img-preview hidden" alt="预览">`;
+                }
+                container.appendChild(div);
+            });
+        }
+
+        function previewImg(input) {
+            const img = input.nextElementSibling;
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    img.src = e.target.result;
+                    img.classList.remove('hidden');
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // 提交表单
+        function submitForm(e) {
+            e.preventDefault();
+            const form = e.target;
+            const fields = JSON.parse(localStorage.getItem('formFields') || '[]');
+            const record = {
+                id: Date.now(),
+                status: 'pending',
+                submitTime: new Date().toLocaleString(),
+                data: {}
+            };
+
+            fields.forEach(field => {
+                const el = form.querySelector(`[name="${field.id}"]`);
+                if (field.type === 'image') {
+                    const img = el.nextElementSibling;
+                    record.data[field.name] = img.src;
+                } else {
+                    record.data[field.name] = el.value;
+                }
+            });
+
+            const records = JSON.parse(localStorage.getItem('records') || '[]');
+            records.unshift(record);
+            localStorage.setItem('records', JSON.stringify(records));
+            alert('提交成功，等待管理员审核');
+            form.reset();
+            document.querySelectorAll('.img-preview').forEach(img => img.classList.add('hidden'));
+        }
+
+        // 登录相关逻辑
+        function showLogin() {
+            if (!firewallCheck()) return;
+            document.getElementById('loginModal').classList.remove('hidden');
+        }
+
+        function closeLogin() {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+
+        function doLogin() {
+            const username = document.getElementById('loginUser').value;
+            const password = document.getElementById('loginPass').value;
+            const admins = JSON.parse(localStorage.getItem('admins') || '[]');
+            const tip = document.getElementById('loginTip');
+
+            const failCount = parseInt(localStorage.getItem('loginFailCount') || 0);
+            if (failCount >= 5) {
+                firewallCheck();
+                return;
+            }
+
+            const exist = admins.find(a => a.username === username && a.password === password);
+            if (exist) {
+                localStorage.setItem('currentAdmin', username);
+                localStorage.setItem('loginFailCount', 0);
+                closeLogin();
+                showAdminPage();
+            } else {
+                const newCount = failCount + 1;
+                localStorage.setItem('loginFailCount', newCount);
+                tip.textContent = `账号或密码错误，剩余${5 - newCount}次机会`;
+                if (newCount >= 5) {
+                    setTimeout(() => {
+                        closeLogin();
+                        firewallCheck();
+                    }, 1000);
+                }
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('currentAdmin');
+            location.reload();
+        }
+
+        function showAdminPage() {
+            document.getElementById('userPage').classList.add('hidden');
+            document.getElementById('adminPage').classList.remove('hidden');
+            document.getElementById('loginBtn').classList.add('hidden');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+            document.getElementById('roleText').textContent = '管理员：' + localStorage.getItem('currentAdmin');
+            renderFieldList();
+            renderRecords();
+            renderAdminList();
+        }
+
+        // 切换后台标签页
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+        }
+
+        // 表单字段配置
+        function renderFieldList() {
+            const fields = JSON.parse(localStorage.getItem('formFields') || '[]');
+            const container = document.getElementById('fieldList');
+            container.innerHTML = '';
+            fields.forEach(field => {
+                const div = document.createElement('div');
+                div.className = 'field-row';
+                const typeText = {text:'文字', number:'数字', image:'图片'}[field.type];
+                div.innerHTML = `
+                    <span style="flex:1;">${field.name}（${typeText}）</span>
+                    <button class="btn btn-danger" onclick="deleteField(${field.id})">删除</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function addField() {
+            const name = document.getElementById('newFieldName').value.trim();
+            const type = document.getElementById('newFieldType').value;
+            if (!name) return alert('请输入字段名称');
+
+            const fields = JSON.parse(localStorage.getItem('formFields') || '[]');
+            fields.push({ id: Date.now(), name, type });
+            localStorage.setItem('formFields', JSON.stringify(fields));
+            document.getElementById('newFieldName').value = '';
+            renderFieldList();
+            renderForm();
+        }
+
+        function deleteField(id) {
+            if (!confirm('确定删除该字段？')) return;
+            let fields = JSON.parse(localStorage.getItem('formFields') || '[]');
+            fields = fields.filter(f => f.id !== id);
+            localStorage.setItem('formFields', JSON.stringify(fields));
+            renderFieldList();
+            renderForm();
+        }
+
+        // 提交记录管理
+        let currentDeleteId = null;
+
+        function renderRecords() {
+            const records = JSON.parse(localStorage.getItem('records') || '[]');
+            const container = document.getElementById('recordList');
+            if (records.length === 0) {
+                container.innerHTML = '<p style="color:#999;">暂无提交记录</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            records.forEach(record => {
+                const div = document.createElement('div');
+                div.className = 'record-item';
+                const statusText = record.status === 'pass' ? '已通过' : '待审核';
+                const statusClass = record.status === 'pass' ? 'status-pass' : 'status-pending';
+
+                let dataHtml = '';
+                for (let key in record.data) {
+                    if (record.data[key].startsWith('data:image')) {
+                        dataHtml += `<p><b>${key}：</b><br><img src="${record.data[key]}" class="img-preview"></p>`;
+                    } else {
+                        dataHtml += `<p><b>${key}：</b>${record.data[key]}</p>`;
+                    }
+                }
+
+                div.innerHTML = `
+                    <div class="record-header">
+                        <span>提交时间：${record.submitTime}</span>
+                        <span class="status-tag ${statusClass}">${statusText}</span>
+                    </div>
+                    ${dataHtml}
+                    <div style="margin-top: 10px; text-align: right;">
+                        ${record.status !== 'pass' ? `<button class="btn btn-success" onclick="passRecord(${record.id})">审核通过</button>` : ''}
+                        <button class="btn btn-warning" onclick="editRecord(${record.id})">修改</button>
+                        <button class="btn btn-danger" onclick="openDeleteModal(${record.id})">删除</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function passRecord(id) {
+            const records = JSON.parse(localStorage.getItem('records') || '[]');
+            const record = records.find(r => r.id === id);
+            if (record) {
+                record.status = 'pass';
+                localStorage.setItem('records', JSON.stringify(records));
+                renderRecords();
+            }
+        }
+
+        function editRecord(id) {
+            alert('修改功能可扩展弹窗表单编辑，当前版本可按需补充完整逻辑');
+        }
+
+        function openDeleteModal(id) {
+            currentDeleteId = id;
+            document.getElementById('deleteReason').value = '';
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        function closeDeleteModal() {
+            currentDeleteId = null;
+            document.getElementById('deleteModal').classList.add('hidden');
+        }
+
+        function confirmDelete() {
+            const reason = document.getElementById('deleteReason').value.trim();
+            if (!reason) return alert('请填写删除理由');
+
+            let records = JSON.parse(localStorage.getItem('records') || '[]');
+            records = records.filter(r => r.id !== currentDeleteId);
+            localStorage.setItem('records', JSON.stringify(records));
+            closeDeleteModal();
+            renderRecords();
+        }
+
+        // 管理员权限管理
+        function renderAdminList() {
+            const admins = JSON.parse(localStorage.getItem('admins') || '[]');
+            const container = document.getElementById('adminList');
+            container.innerHTML = '';
+            admins.forEach(admin => {
+                const div = document.createElement('div');
+                div.className = 'field-row';
+                div.innerHTML = `
+                    <span style="flex:1;">账号：${admin.username}</span>
+                    ${admin.username !== 'admin' ? `<button class="btn btn-danger" onclick="removeAdmin('${admin.username}')">移除管理员</button>` : '<span style="color:#999;">超级管理员</span>'}
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function addAdmin() {
+            const username = document.getElementById('newAdminUser').value.trim();
+            const password = document.getElementById('newAdminPass').value.trim();
+            if (!username || !password) return alert('请填写完整账号密码');
+
+            const admins = JSON.parse(localStorage.getItem('admins') || '[]');
+            if (admins.find(a => a.username === username)) return alert('该账号已存在');
+
+            admins.push({ username, password });
+            localStorage.setItem('admins', JSON.stringify(admins));
+            document.getElementById('newAdminUser').value = '';
+            document.getElementById('newAdminPass').value = '';
+            renderAdminList();
+        }
+
+        function removeAdmin(username) {
+            if (!confirm('确定移除该管理员权限？')) return;
+            let admins = JSON.parse(localStorage.getItem('admins') || '[]');
+            admins = admins.filter(a => a.username !== username);
+            localStorage.setItem('admins', JSON.stringify(admins));
+            renderAdminList();
+        }
+
+        // 页面初始化
+        window.onload = function() {
+            initData();
+            if (!firewallCheck()) return;
+            renderForm();
+
+            // 已登录自动进入后台
+            if (localStorage.getItem('currentAdmin')) {
+                showAdminPage();
+            }
+        }
+    </script>
+</body>
+</html>
